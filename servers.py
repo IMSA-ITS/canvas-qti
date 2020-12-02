@@ -85,8 +85,16 @@ class QTIHandler(BaseHTTPRequestHandler):
         parsed_path = parse.urlparse(self.path)
         if parsed_path.path == "/validate":
             self.validate()
+        elif parsed_path.path == "/generate":
+            self.validate(generate=True)
+        else:
+            self.send_response(400)
+            self.send_header("Content-Type", "text/plain; charset=utf-8")
+            self.end_headers()
+            self.wfile.write("")
 
-    def validate(self):
+
+    def validate(self, generate=False):
         self.logger.debug("validate")
         content_len = int(self.headers.get("Content-Length"))
         body = self.rfile.read(content_len).decode("utf-8", "strict")
@@ -98,21 +106,20 @@ class QTIHandler(BaseHTTPRequestHandler):
             self.send_response(400)
             self.send_header("Content-Type", "application/json")
             self.end_headers()
-            body = json.dumps({
-                "error": f"QTI parse failed: {e}"
-            })
+            body = json.dumps({"error": f"QTI parse failed: {e}"})
             self.wfile.write(body.encode("utf-8"))
             return
 
         self.logger.debug(f"locals = {locals()}")
 
-        self.send_response(200)
-        self.send_header("Content-Type", "application/json")
-        self.end_headers()
-        response_body = json.dumps({
-        })
-        self.wfile.write(response_body.encode("utf-8"))
-        
+        if not generate:
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            response_body = json.dumps({})
+            self.wfile.write(response_body.encode("utf-8"))
+
+        qti = text2qti.qti.QTI(quiz)
 
 
 if __name__ == "__main__":
