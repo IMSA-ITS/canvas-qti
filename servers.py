@@ -1,6 +1,12 @@
 from http.server import BaseHTTPRequestHandler
 from urllib import parse
+import functools
+import json
 import text2qti
+import text2qti.config
+import logging
+import signal
+import sys
 
 
 class GetHandler(BaseHTTPRequestHandler):
@@ -68,9 +74,55 @@ class GetHandler(BaseHTTPRequestHandler):
         self.wfile.write(message.encode("utf-8"))
 
 
+class QTIHandler(BaseHTTPRequestHandler):
+    def __init__(self, config, *args, **kwargs):
+        self.config = config
+        super().__init__(*args, **kwargs)
+
+    def do_POST(self):
+        parsed_path = parse.urlparse(self.path)
+        #logging.debug(f"POST: {locals()}")
+        if parsed_path.path == "/validate":
+            self.validate()
+
+    def validate(self):
+        logging.debug("validate")
+        content_len = int(self.headers.get("Content-Length"))
+        post_body = self.rfile.read(content_len)
+        try:
+            body = json.loads(post_body.decode("utf-8", "strict"))
+        except json.decoder.JSONDecodeError as e:
+            logging.error(f"failed to decode post body ({post_body}): {e}")
+            self.send_response(400)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            body = json.dumps({
+                "error": f"failed to decode post body: {e}"
+            })
+            self.wfile.write(body.encode("utf-8"))
+            return
+
+        quiz = text2qti.quiz.Quiz(body, config=self.config)
+
+        logging.debug(f"locals = {locals()}")
+
+def signal_handler(sig, frame):
+    logging.info("interrupted")
+    sys.exit(0)
+
+
 if __name__ == "__main__":
     from http.server import HTTPServer
 
-    server = HTTPServer(("localhost", 8080), GetHandler)
+    logging.basicConfig(level=logging.DEBUG)
+
+    signal.signal(signal.SIGINT, signal_handler)
+
+    config = text2qti.config.Config()
+    config.load()
+
+    handler = functools.partial(QTIHandler, config)
+    server = HTTPServer(("localhost", 8080), handler)
     print("Starting server, use <Ctrl-C> to stop")
+
     server.serve_forever()
