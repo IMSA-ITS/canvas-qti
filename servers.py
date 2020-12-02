@@ -5,6 +5,7 @@ import json
 import text2qti
 import text2qti.config
 import logging
+import logging.config
 import signal
 import sys
 
@@ -75,53 +76,61 @@ class GetHandler(BaseHTTPRequestHandler):
 
 
 class QTIHandler(BaseHTTPRequestHandler):
-    def __init__(self, config, *args, **kwargs):
+    def __init__(self, config, logger, *args, **kwargs):
         self.config = config
+        self.logger = logger
         super().__init__(*args, **kwargs)
 
     def do_POST(self):
         parsed_path = parse.urlparse(self.path)
-        #logging.debug(f"POST: {locals()}")
         if parsed_path.path == "/validate":
             self.validate()
 
     def validate(self):
-        logging.debug("validate")
+        self.logger.debug("validate")
         content_len = int(self.headers.get("Content-Length"))
-        post_body = self.rfile.read(content_len)
+        body = self.rfile.read(content_len).decode("utf-8", "strict")
+
         try:
-            body = json.loads(post_body.decode("utf-8", "strict"))
-        except json.decoder.JSONDecodeError as e:
-            logging.error(f"failed to decode post body ({post_body}): {e}")
+            quiz = text2qti.quiz.Quiz(body, config=self.config)
+        except text2qti.err.Text2qtiError as e:
+            self.logger.error(f"text parse failed ({body}): {e}")
             self.send_response(400)
             self.send_header("Content-Type", "application/json")
             self.end_headers()
             body = json.dumps({
-                "error": f"failed to decode post body: {e}"
+                "error": f"QTI parse failed: {e}"
             })
             self.wfile.write(body.encode("utf-8"))
             return
 
-        quiz = text2qti.quiz.Quiz(body, config=self.config)
+        self.logger.debug(f"locals = {locals()}")
 
-        logging.debug(f"locals = {locals()}")
-
-def signal_handler(sig, frame):
-    logging.info("interrupted")
-    sys.exit(0)
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.end_headers()
+        response_body = json.dumps({
+        })
+        self.wfile.write(response_body.encode("utf-8"))
+        
 
 
 if __name__ == "__main__":
     from http.server import HTTPServer
 
-    logging.basicConfig(level=logging.DEBUG)
+    logging.config.fileConfig("logging.conf")
+    logger = logging.getLogger(__name__)
+
+    def signal_handler(sig, frame):
+        logger.info("interrupted")
+        sys.exit(0)
 
     signal.signal(signal.SIGINT, signal_handler)
 
     config = text2qti.config.Config()
     config.load()
 
-    handler = functools.partial(QTIHandler, config)
+    handler = functools.partial(QTIHandler, config, logger)
     server = HTTPServer(("localhost", 8080), handler)
     print("Starting server, use <Ctrl-C> to stop")
 
