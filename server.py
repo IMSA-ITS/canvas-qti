@@ -1,4 +1,5 @@
 from flask import make_response, request, send_file, Flask
+from flask_cors import CORS
 import io
 import logging
 import text2qti
@@ -7,6 +8,7 @@ qti_config = text2qti.config.Config()
 qti_config.load()
 
 app = Flask(__name__)
+CORS(app)
 
 app.logger.setLevel(logging.DEBUG)
 
