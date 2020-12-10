@@ -21,6 +21,13 @@ def root():
 
 @app.route("/validate", methods=["POST"])
 def validate():
+    return doit()
+
+@app.route("/generate", methods=["POST"])
+def generate():
+    return doit(generate=True)
+
+def doit(generate=False):
     app.logger.info(f"validate: {request.args}")
 
     body = request.get_data().decode("utf-8")
@@ -38,7 +45,7 @@ def validate():
 
     app.logger.debug(f"locals = {locals()}")
 
-    if not ("generate" in request.args):
+    if not generate:
         return jsonify(responseBody)
 
     qti = text2qti.qti.QTI(quiz)
