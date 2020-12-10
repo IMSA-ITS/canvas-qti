@@ -1,8 +1,9 @@
-from flask import make_response, request, send_file, Flask
+from flask import jsonify, make_response, request, send_file, Flask
 from flask_cors import CORS
 import io
 import logging
 import text2qti
+import time
 
 qti_config = text2qti.config.Config()
 qti_config.load()
@@ -25,22 +26,28 @@ def validate():
     body = request.get_data().decode("utf-8")
     app.logger.debug(f"body = {body}")
 
+    responseBody = {"error": ""}
+
+    # time.sleep(2)               # for testing with lag
     try:
-        quiz = text2qti.quiz.Quiz(body, config=qti_config)
+        quiz = text2qti.quiz.Quiz(body, config=qti_config, source_name="input")
     except text2qti.err.Text2qtiError as e:
         app.logger.error(f"text parse failed ({body}): {e}")
-        return f"parse for QTI failed: {e}\n", 400
+        responseBody["error"] = f"{e}\n"
+        return jsonify(responseBody)
 
     app.logger.debug(f"locals = {locals()}")
 
     if not ("generate" in request.args):
-        return "ok"
+        return jsonify(responseBody)
 
     qti = text2qti.qti.QTI(quiz)
 
     fp = io.BytesIO()
     qti.write(fp)
     fp.seek(0)
+    app.logger.debug(f"about to send generated file")
+
     return send_file(
         fp,
         mimetype="application/zip",
