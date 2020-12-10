@@ -38,6 +38,9 @@ def doit(generate=False):
     # time.sleep(2)               # for testing with lag
     try:
         quiz = text2qti.quiz.Quiz(body, config=qti_config, source_name="input")
+        responseBody["quizinfo"] = quizinfo(quiz)
+
+        app.logger.debug(f"{len(quiz.questions_and_delims)} questions")
     except text2qti.err.Text2qtiError as e:
         app.logger.error(f"text parse failed ({body}): {e}")
         responseBody["error"] = f"{e}\n"
@@ -61,3 +64,18 @@ def doit(generate=False):
         as_attachment=True,
         attachment_filename="qti.zip",
     )
+
+
+def quizinfo(quiz):
+    info = { "questions": 0, "groups": 0 }
+
+    for x in quiz.questions_and_delims:
+        if isinstance(x, text2qti.quiz.Question):
+            info["questions"] += 1
+        elif isinstance(x, text2qti.quiz.GroupStart):
+            info["groups"] += 1
+            info["questions"] += len(x.group.questions)
+
+    return info
+
+            
